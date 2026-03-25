@@ -333,11 +333,7 @@ Index a file, run `describe_dataset`, and look at what comes back.
 
 That single call — a few milliseconds, a few hundred tokens — tells you everything that would have cost you 60 million tokens to read raw.
 
-That's the whole idea.
-
-## Star History
-
-<a href="https://www.star-history.com/?repos=jgravelle%2Fjdatamunch-mcp&type=date&legend=top-left">
+That's the whole idea...
  <picture>
    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=jgravelle/jdatamunch-mcp&type=date&theme=dark&legend=top-left" />
    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=jgravelle/jdatamunch-mcp&type=date&legend=top-left" />
