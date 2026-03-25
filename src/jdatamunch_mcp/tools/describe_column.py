@@ -1,0 +1,121 @@
+"""describe_column tool: Deep profile of a single column."""
+
+import json
+import time
+from typing import Optional
+
+from ..config import get_index_path
+from ..profiler.histogram import compute_histogram
+from ..storage.data_store import DataStore
+from ..storage.token_tracker import estimate_savings, record_savings, cost_avoided
+
+
+def describe_column(
+    dataset: str,
+    column: str,
+    top_n: int = 20,
+    histogram_bins: int = 10,
+    storage_path: Optional[str] = None,
+) -> dict:
+    """Return a deep profile of a single column.
+
+    Full value distribution for low-cardinality; histogram bins for numeric;
+    temporal range for datetime.
+    """
+    t0 = time.time()
+    store = DataStore(base_path=storage_path or str(get_index_path()))
+
+    idx = store.load(dataset)
+    if idx is None:
+        return {"error": f"NOT_INDEXED: dataset {dataset!r} is not indexed."}
+
+    # Resolve column by name or ID (e.g. "lapd-crime::AREA NAME#column")
+    if "#column" in column:
+        col_name = column.split("::")[-1].replace("#column", "")
+    else:
+        col_name = column
+
+    col_data = next((c for c in idx.columns if c["name"] == col_name), None)
+    if col_data is None:
+        return {"error": f"INVALID_COLUMN: column {col_name!r} not found in dataset {dataset!r}"}
+
+    result: dict = {
+        "id": f"{dataset}::{col_name}#column",
+        "name": col_name,
+        "type": col_data["type"],
+        "count": col_data["count"],
+        "null_count": col_data["null_count"],
+        "null_pct": col_data["null_pct"],
+        "cardinality": col_data["cardinality"],
+        "cardinality_is_exact": col_data["cardinality_is_exact"],
+        "is_unique": col_data["is_unique"],
+        "sample_values": col_data.get("sample_values", []),
+    }
+
+    # Value distribution (for low-cardinality)
+    if col_data.get("value_index"):
+        # Sort by count descending, limit to top_n
+        sorted_vals = sorted(
+            col_data["value_index"].items(),
+            key=lambda x: x[1],
+            reverse=True,
+        )
+        total = sum(c for _, c in sorted_vals)
+        result["value_distribution"] = [
+            {"value": v, "count": c, "pct": round(c / total * 100, 2) if total else 0}
+            for v, c in sorted_vals[:top_n]
+        ]
+        result["unique_values_truncated"] = len(sorted_vals) > top_n
+
+    elif col_data.get("top_values"):
+        total = sum(tv["count"] for tv in col_data["top_values"])
+        result["top_values"] = [
+            {"value": tv["value"], "count": tv["count"],
+             "pct": round(tv["count"] / total * 100, 2) if total else 0}
+            for tv in col_data["top_values"][:top_n]
+        ]
+
+    # Numeric stats + histogram
+    if col_data["type"] in ("integer", "float"):
+        result["min"] = col_data.get("min")
+        result["max"] = col_data.get("max")
+        result["mean"] = col_data.get("mean")
+        result["median"] = col_data.get("median")
+
+        # Rebuild histogram from value_index if available (low-cardinality numeric)
+        if col_data.get("value_index") and histogram_bins > 0:
+            numeric_vals = []
+            for val_str, cnt in col_data["value_index"].items():
+                try:
+                    v = float(val_str)
+                    numeric_vals.extend([v] * min(cnt, 1000))  # cap to avoid huge lists
+                except (ValueError, TypeError):
+                    pass
+            if numeric_vals:
+                result["histogram"] = compute_histogram(
+                    numeric_vals, bins=histogram_bins,
+                    col_min=col_data.get("min"), col_max=col_data.get("max"),
+                )
+
+    # Datetime range
+    if col_data["type"] == "datetime":
+        result["datetime_min"] = col_data.get("datetime_min")
+        result["datetime_max"] = col_data.get("datetime_max")
+        result["datetime_format"] = col_data.get("datetime_format")
+
+    if col_data.get("ai_summary"):
+        result["ai_summary"] = col_data["ai_summary"]
+
+    response_bytes = len(json.dumps(result).encode("utf-8"))
+    tokens_saved = estimate_savings(idx.source_size_bytes, response_bytes)
+    total_saved = record_savings(tokens_saved, str(store.base_path))
+
+    return {
+        "result": result,
+        "_meta": {
+            "timing_ms": round((time.time() - t0) * 1000, 1),
+            "tokens_saved": tokens_saved,
+            "total_tokens_saved": total_saved,
+            **cost_avoided(tokens_saved, total_saved),
+        },
+    }
