@@ -53,15 +53,15 @@ Index once. Query cheaply. Keep moving.
 >
 > **jDataMunch-only licenses**
 >
-> * [Builder — $39](https://j.gravelle.us/jDataMunch/descriptions.php#builder) — 1 developer
-> * [Studio — $149](https://j.gravelle.us/jDataMunch/descriptions.php#studio) — up to 5 developers
-> * [Platform — $799](https://j.gravelle.us/jDataMunch/descriptions.php#platform) — org-wide internal deployment
+> * [Builder — $39](https://j.gravelle.us/jCodeMunch/descriptions.php#builder) — 1 developer
+> * [Studio — $149](https://j.gravelle.us/jCodeMunch/descriptions.php#studio) — up to 5 developers
+> * [Platform — $799](https://j.gravelle.us/jCodeMunch/descriptions.php#platform) — org-wide internal deployment
 >
 > **Want the full jMunch suite?**
 >
-> * [Munch Trio Builder Bundle — $99](https://j.gravelle.us/jDataMunch/descriptions.php#builder)
-> * [Munch Trio Studio Bundle — $449](https://j.gravelle.us/jDataMunch/descriptions.php#studio)
-> * [Munch Trio Platform Bundle — $2,499](https://j.gravelle.us/jDataMunch/descriptions.php#platform)
+> * [Munch Trio Builder Bundle — $99](https://j.gravelle.us/jCodeMunch/descriptions.php#builder)
+> * [Munch Trio Studio Bundle — $449](https://j.gravelle.us/jCodeMunch/descriptions.php#studio)
+> * [Munch Trio Platform Bundle — $2,499](https://j.gravelle.us/jCodeMunch/descriptions.php#platform)
 
 **Stop paying your model to read the whole damn spreadsheet.**
 
