@@ -16,8 +16,14 @@ task completion.
 |---------|-----:|--------:|----------:|----------------:|
 | crime.csv (LA crime records) | 1,004,894 | 28 | 255.5 MB | 111,028,360 |
 
-The dataset is an LAPD crime incident records CSV downloaded from the
-LA Open Data portal. No filtering was applied.
+**Source:** [Crime Data from 2020 to Present — data.gov](https://catalog-beta.data.gov/dataset/crime-data-from-2020-to-present)
+
+Download the CSV from the link above and pass the path to the harness:
+```bash
+python benchmarks/harness/run_benchmark.py /path/to/crime.csv
+```
+
+No filtering was applied — the full dataset was used as-is.
 
 ## Query Corpus
 

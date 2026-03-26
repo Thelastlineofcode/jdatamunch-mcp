@@ -5,7 +5,7 @@
 **Baseline:** full raw source file tokenized (minimum for "read everything" agent)  
 **AI summaries:** disabled (clean retrieval-only measurement)  
 
-## crime.csv
+## crime.csv ([source](https://catalog-beta.data.gov/dataset/crime-data-from-2020-to-present))
 
 | Metric | Value |
 |--------|-------|

@@ -1,1 +1,1 @@
-*.csv filter=lfs diff=lfs merge=lfs -text
+# No large files tracked in this repo — download test datasets from their sources.
