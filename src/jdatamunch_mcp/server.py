@@ -20,6 +20,8 @@ from .tools.get_rows import get_rows
 from .tools.aggregate import aggregate
 from .tools.sample_rows import sample_rows
 from .tools.get_session_stats import get_session_stats
+from .budget import enforce_budget
+from .call_tracker import record_call
 
 server = Server("jdatamunch-mcp")
 
@@ -31,16 +33,16 @@ async def list_tools() -> list[Tool]:
         Tool(
             name="index_local",
             description=(
-                "Index a local CSV or Excel file. Profiles all columns, detects types, "
-                "computes statistics, and loads rows into SQLite for fast filtered retrieval. "
-                "Set incremental=true (default) to skip re-indexing if file is unchanged."
+                "Index a local data file (CSV, Excel, Parquet, or JSONL). Profiles all columns, "
+                "detects types, computes statistics, and loads rows into SQLite for fast filtered "
+                "retrieval. Set incremental=true (default) to skip re-indexing if file is unchanged."
             ),
             inputSchema={
                 "type": "object",
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "Absolute path to CSV, XLSX, or XLS file",
+                        "description": "Absolute path to data file (.csv, .tsv, .xlsx, .xls, .parquet, .jsonl, .ndjson)",
                     },
                     "name": {
                         "type": "string",
@@ -82,7 +84,9 @@ async def list_tools() -> list[Tool]:
             description=(
                 "Primary orientation tool. Returns every column's name, type, cardinality, "
                 "null%, and sample values. A single call replaces reading the entire source file. "
-                "Equivalent to opening a spreadsheet and reading the column headers + stats."
+                "Equivalent to opening a spreadsheet and reading the column headers + stats. "
+                "On wide tables (60+ columns), results are auto-paginated — use columns=[] to "
+                "select specific ones, or columns_offset to page through remaining columns."
             ),
             inputSchema={
                 "type": "object",
@@ -96,6 +100,11 @@ async def list_tools() -> list[Tool]:
                         "items": {"type": "string"},
                         "description": "Filter to specific columns (default: all)",
                     },
+                    "columns_offset": {
+                        "type": "integer",
+                        "description": "Pagination offset for wide tables (default 0)",
+                        "default": 0,
+                    },
                 },
                 "required": ["dataset"],
             },
@@ -104,7 +113,8 @@ async def list_tools() -> list[Tool]:
             name="describe_column",
             description=(
                 "Deep profile of a single column. Full value distribution for low-cardinality "
-                "columns, histogram bins for numeric, temporal range for datetime."
+                "columns, histogram bins for numeric, temporal range for datetime. "
+                "top_n capped at 200; histogram_bins capped at 50."
             ),
             inputSchema={
                 "type": "object",
@@ -132,7 +142,8 @@ async def list_tools() -> list[Tool]:
             name="search_data",
             description=(
                 "Search across column names and values. Returns column-level results with IDs "
-                "— tells you where to look, not the data itself. Use before get_rows or describe_column."
+                "— tells you where to look, not the data itself. Use before get_rows or describe_column. "
+                "max_results capped at 50."
             ),
             inputSchema={
                 "type": "object",
@@ -161,7 +172,9 @@ async def list_tools() -> list[Tool]:
             name="get_rows",
             description=(
                 "Filtered row retrieval via structured filters. All filters are SQL-parameterized "
-                "(no injection). Operators: eq, neq, gt, gte, lt, lte, contains, in, is_null, between."
+                "(no injection). Operators: eq, neq, gt, gte, lt, lte, contains, in, is_null, between. "
+                "Use columns=[] to project — reduces tokens significantly on wide tables. "
+                "Prefer aggregate() for summaries over paginating through rows."
             ),
             inputSchema={
                 "type": "object",
@@ -215,7 +228,7 @@ async def list_tools() -> list[Tool]:
             description=(
                 "Server-side aggregations (GROUP BY). Saves orders of magnitude in tokens "
                 "vs returning rows for the LLM to aggregate. Functions: count, sum, avg, "
-                "min, max, count_distinct, median."
+                "min, max, count_distinct, median. limit capped at 1000."
             ),
             inputSchema={
                 "type": "object",
@@ -267,7 +280,8 @@ async def list_tools() -> list[Tool]:
             name="sample_rows",
             description=(
                 "Return a sample of rows. Useful for understanding data shape "
-                "without prior knowledge. Method: 'head', 'tail', or 'random'."
+                "without prior knowledge. Method: 'head', 'tail', or 'random'. "
+                "Use columns=[] on wide tables to reduce response size."
             ),
             inputSchema={
                 "type": "object",
@@ -319,6 +333,17 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     storage_path = os.environ.get("DATA_INDEX_PATH")
 
     try:
+        # Anti-loop detection for row-retrieval tools
+        dataset_arg = arguments.get("dataset", "")
+        if name in ("get_rows", "sample_rows", "aggregate", "search_data", "describe_dataset"):
+            loop_warning = record_call(
+                tool=name,
+                dataset=dataset_arg,
+                offset=arguments.get("offset", 0),
+            )
+        else:
+            loop_warning = None
+
         if name == "index_local":
             result = await asyncio.to_thread(
                 index_local,
@@ -339,6 +364,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             result = describe_dataset(
                 dataset=arguments["dataset"],
                 columns=arguments.get("columns"),
+                columns_offset=arguments.get("columns_offset", 0),
                 storage_path=storage_path,
             )
         elif name == "describe_column":
@@ -394,6 +420,11 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             result = get_session_stats(storage_path=storage_path)
         else:
             result = {"error": f"Unknown tool: {name}"}
+
+        if isinstance(result, dict) and "error" not in result:
+            result = enforce_budget(result, name)
+            if loop_warning:
+                result.setdefault("_meta", {})["loop_warning"] = loop_warning
 
         if isinstance(result, dict):
             result.setdefault("_meta", {})["powered_by"] = (

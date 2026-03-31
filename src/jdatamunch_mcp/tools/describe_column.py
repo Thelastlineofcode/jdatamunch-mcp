@@ -4,7 +4,7 @@ import json
 import time
 from typing import Optional
 
-from ..config import get_index_path
+from ..config import get_index_path, HARD_CAP_DESCRIBE_COLUMN_TOP_N, HARD_CAP_DESCRIBE_COLUMN_BINS
 from ..profiler.histogram import compute_histogram
 from ..storage.data_store import DataStore
 from ..storage.token_tracker import estimate_savings, record_savings, cost_avoided
@@ -23,6 +23,8 @@ def describe_column(
     temporal range for datetime.
     """
     t0 = time.time()
+    top_n = min(max(1, top_n), HARD_CAP_DESCRIBE_COLUMN_TOP_N)
+    histogram_bins = min(max(1, histogram_bins), HARD_CAP_DESCRIBE_COLUMN_BINS)
     store = DataStore(base_path=storage_path or str(get_index_path()))
 
     idx = store.load(dataset)

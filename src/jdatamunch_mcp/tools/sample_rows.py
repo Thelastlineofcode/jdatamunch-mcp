@@ -4,7 +4,7 @@ import json
 import time
 from typing import Optional
 
-from ..config import get_index_path
+from ..config import get_index_path, MAX_COLUMNS_ROWS
 from ..storage.data_store import DataStore
 from ..storage.sqlite_store import query_sample
 from ..storage.token_tracker import estimate_savings, record_savings, cost_avoided
@@ -40,6 +40,18 @@ def sample_rows(
 
     schema_cols = idx.columns
 
+    # Auto-limit columns on wide tables when no explicit projection
+    column_truncation = None
+    if not columns and len(schema_cols) > MAX_COLUMNS_ROWS:
+        omitted = [c["name"] for c in schema_cols[MAX_COLUMNS_ROWS:]]
+        column_truncation = {
+            "total_columns": len(schema_cols),
+            "returned": MAX_COLUMNS_ROWS,
+            "omitted_columns": omitted,
+            "hint": "Use columns=['col1','col2'] to select specific columns",
+        }
+        columns = [c["name"] for c in schema_cols[:MAX_COLUMNS_ROWS]]
+
     # Validate column projection
     if columns:
         schema_names = {c["name"] for c in schema_cols}
@@ -59,17 +71,19 @@ def sample_rows(
     tokens_saved = estimate_savings(idx.source_size_bytes, response_bytes)
     total_saved = record_savings(tokens_saved, str(store.base_path))
 
-    return {
-        "result": {
-            "rows": rows,
-            "returned": len(rows),
-            "method": method,
-            "dataset_rows": idx.row_count,
-        },
-        "_meta": {
-            "timing_ms": round((time.time() - t0) * 1000, 1),
-            "tokens_saved": tokens_saved,
-            "total_tokens_saved": total_saved,
-            **cost_avoided(tokens_saved, total_saved),
-        },
+    result_body: dict = {
+        "rows": rows,
+        "returned": len(rows),
+        "method": method,
+        "dataset_rows": idx.row_count,
     }
+    meta: dict = {
+        "timing_ms": round((time.time() - t0) * 1000, 1),
+        "tokens_saved": tokens_saved,
+        "total_tokens_saved": total_saved,
+        **cost_avoided(tokens_saved, total_saved),
+    }
+    if column_truncation:
+        meta["column_truncation"] = column_truncation
+
+    return {"result": result_body, "_meta": meta}

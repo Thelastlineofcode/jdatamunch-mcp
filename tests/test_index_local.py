@@ -49,7 +49,7 @@ def test_unknown_file_raises(storage_dir):
 
 
 def test_unsupported_format(tmp_path, storage_dir):
-    p = tmp_path / "data.parquet"
+    p = tmp_path / "data.avro"
     p.write_bytes(b"fake")
     result = index_local(path=str(p), storage_path=storage_dir)
     assert "error" in result

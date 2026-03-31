@@ -3,7 +3,7 @@
 import time
 from typing import Optional
 
-from ..config import get_index_path
+from ..config import get_index_path, HARD_CAP_SEARCH_MAX_RESULTS
 from ..storage.data_store import DataStore
 from ..storage.token_tracker import get_total_saved
 
@@ -95,6 +95,7 @@ def search_data(
     not the data itself.
     """
     t0 = time.time()
+    max_results = min(max(1, max_results), HARD_CAP_SEARCH_MAX_RESULTS)
     store = DataStore(base_path=storage_path or str(get_index_path()))
 
     idx = store.load(dataset)

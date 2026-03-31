@@ -28,7 +28,18 @@ def parse_file(
             raise ValueError(
                 f"Excel support requires openpyxl and xlrd: pip install 'jdatamunch-mcp[excel]' ({e})"
             )
+    elif suffix == ".parquet":
+        try:
+            from .parquet_parser import parse_parquet
+            return parse_parquet(path)
+        except ImportError as e:
+            raise ValueError(
+                f"Parquet support requires pyarrow: pip install 'jdatamunch-mcp[parquet]' ({e})"
+            )
+    elif suffix in (".jsonl", ".ndjson"):
+        from .jsonl_parser import parse_jsonl
+        return parse_jsonl(path, encoding=encoding)
     else:
         raise ValueError(
-            f"Unsupported file format: {suffix!r}. Supported: .csv, .tsv, .xlsx, .xls"
+            f"Unsupported file format: {suffix!r}. Supported: .csv, .tsv, .xlsx, .xls, .parquet, .jsonl, .ndjson"
         )

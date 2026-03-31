@@ -1,6 +1,7 @@
 """Shared fixtures for jdatamunch-mcp tests."""
 
 import csv
+import json
 import os
 import tempfile
 from pathlib import Path
@@ -18,6 +19,12 @@ try:
     HAS_XLRD = True
 except ImportError:
     HAS_XLRD = False
+
+try:
+    import pyarrow  # noqa: F401
+    HAS_PYARROW = True
+except ImportError:
+    HAS_PYARROW = False
 
 
 @pytest.fixture
@@ -122,6 +129,46 @@ def sample_xls(tmp_path):
             if val is not None:
                 ws.write(row_idx, col_idx, val)
     wb.save(str(path))
+    return str(path)
+
+
+@pytest.fixture
+def sample_parquet(tmp_path):
+    """Small .parquet file matching sample_csv schema."""
+    pytest.importorskip("pyarrow")
+    import pyarrow as pa
+    import pyarrow.parquet as pq
+    path = tmp_path / "sample.parquet"
+    table = pa.table({
+        "id": pa.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], type=pa.int64()),
+        "name": ["Alice", "Bob", "Charlie", "Diana", "Eve", "Frank", "Grace", "Henry", "Iris", "Jack"],
+        "age": pa.array([30, 25, 35, 28, 32, None, 27, 45, 22, 38], type=pa.int64()),
+        "city": ["Hollywood", "Central", "Hollywood", "Pacific", "Hollywood", "Central", "Pacific", "N Hollywood", "Hollywood", "Central"],
+        "score": pa.array([9.5, 7.2, 8.8, 6.1, 9.0, None, 8.3, 7.9, 9.2, 5.5], type=pa.float64()),
+    })
+    pq.write_table(table, str(path))
+    return str(path)
+
+
+@pytest.fixture
+def sample_jsonl(tmp_path):
+    """Small .jsonl file matching sample_csv schema."""
+    path = tmp_path / "sample.jsonl"
+    rows = [
+        {"id": 1, "name": "Alice", "age": 30, "city": "Hollywood", "score": 9.5},
+        {"id": 2, "name": "Bob", "age": 25, "city": "Central", "score": 7.2},
+        {"id": 3, "name": "Charlie", "age": 35, "city": "Hollywood", "score": 8.8},
+        {"id": 4, "name": "Diana", "age": 28, "city": "Pacific", "score": 6.1},
+        {"id": 5, "name": "Eve", "age": 32, "city": "Hollywood", "score": 9.0},
+        {"id": 6, "name": "Frank", "age": None, "city": "Central", "score": None},
+        {"id": 7, "name": "Grace", "age": 27, "city": "Pacific", "score": 8.3},
+        {"id": 8, "name": "Henry", "age": 45, "city": "N Hollywood", "score": 7.9},
+        {"id": 9, "name": "Iris", "age": 22, "city": "Hollywood", "score": 9.2},
+        {"id": 10, "name": "Jack", "age": 38, "city": "Central", "score": 5.5},
+    ]
+    with open(path, "w") as f:
+        for row in rows:
+            f.write(json.dumps(row) + "\n")
     return str(path)
 
 

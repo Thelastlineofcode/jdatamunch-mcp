@@ -4,7 +4,7 @@ import json
 import time
 from typing import Optional
 
-from ..config import get_index_path
+from ..config import get_index_path, MAX_COLUMNS_ROWS
 from ..security import validate_filter
 from ..storage.data_store import DataStore
 from ..storage.sqlite_store import query_rows, MAX_ROWS_RETURNED
@@ -46,6 +46,18 @@ def get_rows(
 
     schema_cols = idx.columns  # list of dicts
 
+    # Auto-limit columns on wide tables when no explicit projection
+    column_truncation = None
+    if not columns and len(schema_cols) > MAX_COLUMNS_ROWS:
+        omitted = [c["name"] for c in schema_cols[MAX_COLUMNS_ROWS:]]
+        column_truncation = {
+            "total_columns": len(schema_cols),
+            "returned": MAX_COLUMNS_ROWS,
+            "omitted_columns": omitted,
+            "hint": "Use columns=['col1','col2'] to select specific columns",
+        }
+        columns = [c["name"] for c in schema_cols[:MAX_COLUMNS_ROWS]]
+
     # Validate columns projection
     if columns:
         schema_names = {c["name"] for c in schema_cols}
@@ -85,12 +97,16 @@ def get_rows(
     tokens_saved = estimate_savings(idx.source_size_bytes, response_bytes)
     total_saved = record_savings(tokens_saved, str(store.base_path))
 
+    meta: dict = {
+        "timing_ms": round((time.time() - t0) * 1000, 1),
+        "tokens_saved": tokens_saved,
+        "total_tokens_saved": total_saved,
+        **cost_avoided(tokens_saved, total_saved),
+    }
+    if column_truncation:
+        meta["column_truncation"] = column_truncation
+
     return {
         "result": query_result,
-        "_meta": {
-            "timing_ms": round((time.time() - t0) * 1000, 1),
-            "tokens_saved": tokens_saved,
-            "total_tokens_saved": total_saved,
-            **cost_avoided(tokens_saved, total_saved),
-        },
+        "_meta": meta,
     }

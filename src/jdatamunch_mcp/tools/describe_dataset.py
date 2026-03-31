@@ -4,7 +4,7 @@ import json
 import time
 from typing import Optional
 
-from ..config import get_index_path
+from ..config import get_index_path, MAX_COLUMNS_DESCRIBE
 from ..storage.data_store import DataStore
 from ..storage.token_tracker import estimate_savings, record_savings, cost_avoided, get_total_saved
 
@@ -12,6 +12,7 @@ from ..storage.token_tracker import estimate_savings, record_savings, cost_avoid
 def describe_dataset(
     dataset: str,
     columns: Optional[list] = None,
+    columns_offset: int = 0,
     storage_path: Optional[str] = None,
 ) -> dict:
     """Return schema profile for a dataset — all columns with type, cardinality, samples.
@@ -27,6 +28,7 @@ def describe_dataset(
 
     # Filter to requested columns
     all_cols = idx.columns
+    explicit_columns = bool(columns)
     if columns:
         col_set = set(columns)
         filtered = [c for c in all_cols if c["name"] in col_set]
@@ -35,6 +37,23 @@ def describe_dataset(
             return {"error": f"INVALID_COLUMN: {sorted(missing)}"}
     else:
         filtered = all_cols
+
+    # Wide-table pagination: auto-paginate when no explicit column filter
+    column_pagination = None
+    if not explicit_columns and len(filtered) > MAX_COLUMNS_DESCRIBE:
+        total_cols = len(filtered)
+        start = min(columns_offset, total_cols)
+        end = min(start + MAX_COLUMNS_DESCRIBE, total_cols)
+        remaining = [c["name"] for c in filtered[end:]]
+        column_pagination = {
+            "total_columns": total_cols,
+            "offset": start,
+            "returned": end - start,
+            "truncated": end < total_cols,
+            "remaining_column_names": remaining,
+            "hint": "Use columns=['col1','col2'] to profile specific columns, or columns_offset to page",
+        }
+        filtered = filtered[start:end]
 
     # Build column summaries for the response (exclude heavy value_index for bandwidth)
     col_summaries = []
@@ -69,17 +88,21 @@ def describe_dataset(
     tokens_saved = estimate_savings(idx.source_size_bytes, response_bytes)
     total_saved = record_savings(tokens_saved, str(store.base_path))
 
+    result_body: dict = {
+        "dataset": idx.dataset,
+        "file": idx.source_path.split("/")[-1].split("\\")[-1],
+        "rows": idx.row_count,
+        "column_count": idx.column_count,
+        "source_size_bytes": idx.source_size_bytes,
+        "indexed_at": idx.indexed_at,
+        "columns": col_summaries,
+        "dataset_summary": idx.dataset_summary,
+    }
+    if column_pagination:
+        result_body["column_pagination"] = column_pagination
+
     return {
-        "result": {
-            "dataset": idx.dataset,
-            "file": idx.source_path.split("/")[-1].split("\\")[-1],
-            "rows": idx.row_count,
-            "column_count": idx.column_count,
-            "source_size_bytes": idx.source_size_bytes,
-            "indexed_at": idx.indexed_at,
-            "columns": col_summaries,
-            "dataset_summary": idx.dataset_summary,
-        },
+        "result": result_body,
         "_meta": {
             "timing_ms": round((time.time() - t0) * 1000, 1),
             "tokens_saved": tokens_saved,

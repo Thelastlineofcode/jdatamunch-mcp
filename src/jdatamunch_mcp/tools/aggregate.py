@@ -4,7 +4,7 @@ import json
 import time
 from typing import Optional
 
-from ..config import get_index_path
+from ..config import get_index_path, HARD_CAP_AGGREGATE_LIMIT
 from ..security import validate_filter
 from ..storage.data_store import DataStore
 from ..storage.sqlite_store import query_aggregate
@@ -27,6 +27,7 @@ def aggregate(
     Aggregation functions: count, sum, avg, min, max, count_distinct, median.
     """
     t0 = time.time()
+    limit = min(max(1, limit), HARD_CAP_AGGREGATE_LIMIT)
 
     if not aggregations:
         return {"error": "INVALID_FILTER: aggregations list is required"}
