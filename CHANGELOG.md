@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.0] — 2026-04-08
+
+### New features
+
+- **`index_repo(url)` tool** — index data files directly from a GitHub repository. Discovers CSV, Excel, Parquet, and JSONL files via the GitHub Trees API, downloads each to a temp directory, and indexes via the existing `index_local` pipeline. Datasets are named `{owner}--{repo}--{filename}`.
+  - Incremental: caches HEAD SHA to skip entirely when repo is unchanged
+  - Limits: 50 MB per file, 20 files per repo
+  - Concurrent downloads (semaphore-limited to 5)
+  - Supports `GITHUB_TOKEN` env var for private repos and rate limits
+
+### Tests
+
+- 18 new tests for index_repo (138 total, 10 skipped for optional deps)
+
 ## [0.4.0] — 2026-04-08
 
 ### New features

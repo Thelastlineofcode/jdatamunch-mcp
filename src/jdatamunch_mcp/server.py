@@ -23,6 +23,7 @@ from .tools.get_session_stats import get_session_stats
 from .tools.get_schema_drift import get_schema_drift
 from .tools.get_data_hotspots import get_data_hotspots
 from .tools.summarize_dataset import summarize_dataset as summarize_dataset_tool
+from .tools.index_repo import index_repo
 from .budget import enforce_budget
 from .call_tracker import record_call
 
@@ -75,6 +76,35 @@ async def list_tools() -> list[Tool]:
                     },
                 },
                 "required": ["path"],
+            },
+        ),
+        Tool(
+            name="index_repo",
+            description=(
+                "Index data files from a GitHub repository. Discovers CSV, Excel, Parquet, "
+                "and JSONL files, downloads them, and indexes each via the same pipeline as "
+                "index_local. Datasets are named {owner}--{repo}--{filename}. "
+                "Max 50 MB per file, 20 files per repo. Set GITHUB_TOKEN env var for "
+                "private repos or to avoid rate limits."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "GitHub repo URL or owner/repo string (e.g. 'pandas-dev/pandas' or 'https://github.com/pandas-dev/pandas')",
+                    },
+                    "incremental": {
+                        "type": "boolean",
+                        "description": "Skip re-index if HEAD SHA unchanged (default true)",
+                        "default": True,
+                    },
+                    "github_token": {
+                        "type": "string",
+                        "description": "GitHub token override (defaults to GITHUB_TOKEN env var)",
+                    },
+                },
+                "required": ["url"],
             },
         ),
         Tool(
@@ -425,6 +455,13 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 header_row=arguments.get("header_row", 0),
                 sheet=arguments.get("sheet"),
                 use_ai_summaries=arguments.get("use_ai_summaries", True),
+                storage_path=storage_path,
+            )
+        elif name == "index_repo":
+            result = await index_repo(
+                url=arguments["url"],
+                incremental=arguments.get("incremental", True),
+                github_token=arguments.get("github_token"),
                 storage_path=storage_path,
             )
         elif name == "list_datasets":
