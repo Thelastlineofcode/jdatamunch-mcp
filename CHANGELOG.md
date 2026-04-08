@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.6.0] — 2026-04-08
+
+### New features
+
+- **`get_correlations(dataset)` tool** — compute pairwise Pearson correlations between all numeric columns via SQLite. Returns pairs sorted by |r| descending with strength labels (`very strong`, `strong`, `moderate`, `weak`, `negligible`), direction, and pair counts. Configurable `min_abs_correlation` threshold (default 0.3), optional column filter, `top_n` cap (default 20, max 200). Caps at 50 numeric columns to avoid O(n^2) blowup.
+
+### Tests
+
+- 13 new tests (151 total, 10 skipped for optional deps)
+
 ## [0.5.0] — 2026-04-08
 
 ### New features

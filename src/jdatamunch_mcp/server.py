@@ -24,6 +24,7 @@ from .tools.get_schema_drift import get_schema_drift
 from .tools.get_data_hotspots import get_data_hotspots
 from .tools.summarize_dataset import summarize_dataset as summarize_dataset_tool
 from .tools.index_repo import index_repo
+from .tools.get_correlations import get_correlations
 from .budget import enforce_budget
 from .call_tracker import record_call
 
@@ -389,6 +390,40 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="get_correlations",
+            description=(
+                "Compute pairwise Pearson correlations between numeric columns. "
+                "Returns pairs sorted by |r| descending, filtered to significant correlations. "
+                "Use this to discover relationships in the data without manual exploration. "
+                "top_n capped at 200."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "dataset": {
+                        "type": "string",
+                        "description": "Dataset identifier",
+                    },
+                    "min_abs_correlation": {
+                        "type": "number",
+                        "description": "Minimum |r| to include in results (default 0.3)",
+                        "default": 0.3,
+                    },
+                    "columns": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Restrict to specific numeric columns (default: all numeric)",
+                    },
+                    "top_n": {
+                        "type": "integer",
+                        "description": "Max pairs to return (default 20, max 200)",
+                        "default": 20,
+                    },
+                },
+                "required": ["dataset"],
+            },
+        ),
+        Tool(
             name="summarize_dataset",
             description=(
                 "Generate natural-language summaries for a dataset and all its columns. "
@@ -535,6 +570,15 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             result = get_data_hotspots(
                 dataset=arguments["dataset"],
                 top_n=arguments.get("top_n", 10),
+                storage_path=storage_path,
+            )
+        elif name == "get_correlations":
+            result = await asyncio.to_thread(
+                get_correlations,
+                dataset=arguments["dataset"],
+                min_abs_correlation=arguments.get("min_abs_correlation", 0.3),
+                columns=arguments.get("columns"),
+                top_n=arguments.get("top_n", 20),
                 storage_path=storage_path,
             )
         elif name == "summarize_dataset":
