@@ -1,7 +1,7 @@
 # jdatamunch-mcp — Project Brief
 
 ## Current State
-- **Version:** 0.8.1 (published to PyPI)
+- **Version:** 0.8.2 (published to PyPI)
 - **GitHub:** `jgravelle/jdatamunch-mcp`
 - **Python:** >=3.10
 

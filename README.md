@@ -1,7 +1,18 @@
+Quickstart - https://github.com/jgravelle/jdatamunch-mcp/blob/main/QUICKSTART.md
+
 <!-- mcp-name: io.github.jgravelle/jdatamunch-mcp -->
 
 ## FREE FOR PERSONAL USE
 **Use it to make money, and Uncle J. gets a taste. Fair enough?** [details](#commercial-licenses)
+
+---
+
+## Documentation
+
+| Doc | What it covers |
+|-----|----------------|
+| [QUICKSTART.md](QUICKSTART.md) | Zero-to-indexed in three steps |
+| [USER-MANUAL.md](USER-MANUAL.md) | Full guide for analysts, ops, and non-developers |
 
 ---
 
@@ -19,7 +30,7 @@ A single `describe_dataset` call answers the same orientation question in **3,84
 
 That is a **25,333× reduction** — measured, not estimated, on a real 1M-row public dataset.
 
-**jDataMunch indexes the file once and lets agents retrieve only the exact data they need**: column profiles, filtered rows, and server-side aggregations — with SQL precision.
+**jDataMunch indexes the file once and lets agents retrieve only the exact data they need**: column profiles, filtered rows, server-side aggregations, cross-dataset joins, and semantic search — with SQL precision.
 
 > **Benchmark:** LAPD crime records — 1,004,894 rows, 28 columns, 255 MB
 > Baseline (raw file): 111,028,360 tokens &nbsp;|&nbsp; jDataMunch: ~3,849 tokens &nbsp;|&nbsp; **25,333× reduction**
@@ -31,6 +42,8 @@ That is a **25,333× reduction** — measured, not estimated, on a real 1M-row p
 | Find relevant columns | Read every row | `search_data` → column-level results with IDs |
 | Answer a filtered question | Load millions of rows | `get_rows` with structured filters → only matching rows |
 | Compute a group-by | Return all data | `aggregate` → server-side SQL, one result set |
+| Compare two datasets | Load both entirely | `join_datasets` → SQL JOIN across indexed stores |
+| Find column relationships | Export to spreadsheet | `get_correlations` → pairwise Pearson correlations |
 
 Index once. Query cheaply. Keep moving.
 **Precision retrieval beats brute-force context.**
@@ -80,8 +93,22 @@ That means:
 * **faster dataset orientation** — one call tells you everything about the schema
 * **accurate filtered queries** — the agent asks for Hollywood assaults, it gets Hollywood assaults
 * **server-side aggregations** — GROUP BY runs in SQLite, not inside the context window
+* **cross-dataset joins** — combine two indexed files in a single SQL query
+* **semantic search** — find columns by meaning, not just keyword match
+* **natural-language summaries** — auto-generated descriptions of every column and dataset
 
 It indexes your files once using a streaming parser and SQLite, stores column profiles and row data with proper type affinity, and retrieves exactly what the agent asked for instead of re-loading the entire file on every question.
+
+---
+
+## Supported file formats
+
+| Format | Extensions | Install extra |
+|--------|-----------|---------------|
+| CSV / TSV | `.csv`, `.tsv` | — (built-in) |
+| Excel | `.xlsx`, `.xls` | `pip install "jdatamunch-mcp[excel]"` |
+| Parquet | `.parquet` | `pip install "jdatamunch-mcp[parquet]"` |
+| JSONL / NDJSON | `.jsonl`, `.ndjson` | — (built-in) |
 
 ---
 
@@ -97,10 +124,12 @@ Most agents still handle spreadsheets like someone who prints the entire interne
 jDataMunch fixes that by giving them a structured way to:
 
 * describe a dataset's schema before touching any row data
-* search for the specific column that holds the answer
+* search for the specific column that holds the answer — by keyword or meaning
 * retrieve only the rows that match the filter
 * run aggregations server-side and get back a single result set
+* join two datasets without loading either into the prompt
 * orient themselves with samples before committing to a full query
+* detect data-quality issues and column correlations automatically
 
 Agents do not need bigger context windows.
 
@@ -112,7 +141,7 @@ They need **better aim**.
 
 ### Column-level retrieval
 
-Understand a dataset's full schema — types, cardinality, null rates, value distributions, samples — in a single sub-10ms call. No rows loaded.
+Understand a dataset's full schema — types, cardinality, null rates, value distributions, samples, and natural-language summaries — in a single sub-10ms call. No rows loaded.
 
 ### Filtered row retrieval
 
@@ -126,26 +155,56 @@ GROUP BY with `count`, `sum`, `avg`, `min`, `max`, `count_distinct`, `median`. T
 
 `search_data` searches column names, value indexes, and AI summaries simultaneously. Ask for "weapon type" and get `Weapon Used Cd` back. Ask for "Hollywood" and get the column whose values contain it.
 
+**Semantic search** (v0.8+): Enable `semantic=true` for embedding-based search. Queries like "where did the crime happen" match `AREA NAME` even without keyword overlap. Supports local embeddings (sentence-transformers), Gemini, or OpenAI as providers.
+
+### Cross-dataset joins
+
+`join_datasets` combines two indexed datasets via SQL `ATTACH DATABASE` — inner, left, right, or cross joins. Column projection, per-side filters, ordering, and pagination. No data leaves SQLite.
+
+### Correlation discovery
+
+`get_correlations` computes pairwise Pearson correlations between all numeric columns. Discover hidden relationships without manual exploration.
+
+### Natural-language summaries
+
+Every indexed dataset gets auto-generated summaries describing data shape, column types, ranges, cardinality, quality issues, and temporal spans — no external API calls needed.
+
+### Data quality triage
+
+`get_data_hotspots` ranks columns by composite risk: null rate, cardinality anomalies, and numeric outlier spread. `get_schema_drift` compares schema between two dataset versions and classifies changes as identical, additive, or breaking.
+
 ### Token savings telemetry
 
-Every call reports `tokens_saved` and `cost_avoided` estimates. `get_session_stats` shows your cumulative savings across the session.
+Every call reports `tokens_saved` and `cost_avoided` estimates. `get_session_stats` shows your cumulative savings across the session, with per-model cost breakdowns. Lifetime stats persist across sessions.
+
+### GitHub repository indexing
+
+`index_repo` discovers and indexes data files directly from a GitHub repository — CSV, Excel, Parquet, and JSONL. Incremental by HEAD SHA. Supports private repos via `GITHUB_TOKEN`.
 
 ### Local-first speed
 
 Indexes are stored at `~/.data-index/` by default. No cloud. No API keys required for core functionality.
 
+### Built-in guardrails
+
+* **Token budget enforcement** — every response is capped at a configurable token limit (default 8,000)
+* **Anti-loop detection** — warns when an agent is paginating row-by-row in a tight loop
+* **Wide-table pagination** — `describe_dataset` auto-paginates at 60 columns
+* **Hard caps** on all parameters to prevent runaway queries
+
 ---
 
 ## How it works
 
-jDataMunch parses local CSV and Excel files using a **streaming, single-pass pipeline**:
+jDataMunch parses local CSV, Excel, Parquet, and JSONL files using a **streaming, single-pass pipeline**:
 
 ```
-CSV/Excel file
+CSV/Excel/Parquet/JSONL file
   → Streaming parser (never loads full file into memory)
   → Column profiler (type inference, cardinality, min/max/mean/median, value indexes)
+  → Natural-language summary generator (dataset + per-column descriptions)
   → SQLite writer (10,000-row batches, WAL mode, indexes on low-cardinality columns)
-  → index.json (column profiles, stats, file hash for incremental detection)
+  → index.json (column profiles, stats, summaries, file hash for incremental detection)
 ```
 
 When an agent queries:
@@ -155,6 +214,7 @@ describe_dataset  →  reads index.json in memory (< 10ms)
 get_rows          →  parameterized SQL on data.sqlite (< 100ms on indexed columns)
 aggregate         →  GROUP BY SQL on data.sqlite (< 200ms for simple group-by)
 search_data       →  scans column profiles in memory (< 50ms)
+join_datasets     →  ATTACH DATABASE + cross-store SQL (< 300ms)
 ```
 
 **No raw file is ever re-read after the initial index.** The SQLite database serves all row-level queries.
@@ -176,10 +236,13 @@ For a 255 MB, 1,004,894-row CSV (measured on real data):
 pip install jdatamunch-mcp
 ```
 
-For Excel (`.xlsx`) support:
+For additional format support:
 
 ```bash
-pip install "jdatamunch-mcp[excel]"
+pip install "jdatamunch-mcp[excel]"       # Excel (.xlsx, .xls)
+pip install "jdatamunch-mcp[parquet]"     # Parquet
+pip install "jdatamunch-mcp[semantic]"    # Semantic search (local embeddings)
+pip install "jdatamunch-mcp[all]"         # Everything
 ```
 
 ### 2. Add it to your MCP client
@@ -285,25 +348,54 @@ The agent will call `get_session_stats`, which returns session and lifetime toke
 
 ## Tools
 
+### Indexing
+
 | Tool | What it does |
 |------|-------------|
-| `index_local` | Index a CSV or Excel file. Profiles columns, loads rows into SQLite. Incremental by default (skips if file unchanged). |
+| `index_local` | Index a local CSV, Excel, Parquet, or JSONL file. Profiles columns, generates NL summaries, loads rows into SQLite. Incremental by default (skips if file unchanged). |
+| `index_repo` | Index data files from a GitHub repository. Discovers CSV, Excel, Parquet, and JSONL files via the Trees API and indexes each. Incremental by HEAD SHA. Max 50 MB/file, 20 files/repo. |
+
+### Exploration
+
+| Tool | What it does |
+|------|-------------|
 | `list_datasets` | List all indexed datasets with row counts, column counts, and file sizes. |
-| `describe_dataset` | Full schema profile: every column's name, type, cardinality, null%, and sample values. Primary orientation tool. |
-| `describe_column` | Deep profile of one column: full value distribution, histogram bins, temporal range. |
-| `search_data` | Search column names and values by keyword. Returns column IDs — tells the agent where to look, not the data. |
-| `get_rows` | Filtered row retrieval with 10 operators. Parameterized SQL. 500-row hard cap. |
-| `aggregate` | Server-side GROUP BY: count, sum, avg, min, max, count_distinct, median. |
+| `list_repos` | List GitHub repositories indexed via `index_repo`. Shows repo name, HEAD SHA, dataset count, total rows. |
+| `describe_dataset` | Full schema profile: every column's name, type, cardinality, null%, sample values, and NL summary. Primary orientation tool. Auto-paginates at 60 columns. |
+| `describe_column` | Deep profile of one column: full value distribution, histogram bins, temporal range, NL summary. |
+| `search_data` | Search column names and values by keyword or semantically. Returns column IDs — tells the agent where to look, not the data. Supports hybrid keyword + embedding search. |
 | `sample_rows` | Head, tail, or random sample. Good for first-look at an unfamiliar dataset. |
-| `get_schema_drift` | Compare schema (columns, types, nullability) between two indexed datasets. Detects breaking vs additive changes. |
-| `get_data_hotspots` | Rank columns by data-quality risk: null rate, cardinality anomalies, numeric outlier spread. First-look triage. |
-| `get_session_stats` | Cumulative token savings and cost avoided across the session. |
+
+### Querying
+
+| Tool | What it does |
+|------|-------------|
+| `get_rows` | Filtered row retrieval with 10 operators. Parameterized SQL. 500-row hard cap. Column projection to reduce tokens. |
+| `aggregate` | Server-side GROUP BY: count, sum, avg, min, max, count_distinct, median. Pre-filter support. 1,000-group cap. |
+| `join_datasets` | SQL JOIN across two indexed datasets. Supports inner, left, right, cross. Per-side filters and column projection. |
+
+### Analysis
+
+| Tool | What it does |
+|------|-------------|
+| `get_correlations` | Pairwise Pearson correlations between numeric columns. Sorted by strength, with labels and pair counts. |
+| `get_schema_drift` | Compare schema between two datasets. Detects added/removed columns, type changes, null-rate shifts. |
+| `get_data_hotspots` | Rank columns by data-quality risk: null rate, cardinality anomalies, numeric outlier spread. |
+
+### Management
+
+| Tool | What it does |
+|------|-------------|
+| `summarize_dataset` | Regenerate NL summaries for an already-indexed dataset without re-parsing the source file. |
+| `embed_dataset` | Precompute column embeddings for semantic search. Optional warm-up to eliminate first-query latency. |
+| `delete_dataset` | Remove an indexed dataset and its SQLite store. Irreversible. |
+| `get_session_stats` | Cumulative token savings and cost avoided across the session. Lifetime stats persist across sessions. |
 
 ---
 
 ## Filter operators
 
-`get_rows` and `aggregate` accept structured filters:
+`get_rows`, `aggregate`, and `join_datasets` accept structured filters:
 
 ```json
 {"column": "AREA NAME",    "op": "eq",      "value": "Hollywood"}
@@ -334,9 +426,15 @@ Multiple filters are ANDed. No raw SQL accepted — injection surface is zero.
 |----------|---------|---------|
 | `DATA_INDEX_PATH` | `~/.data-index/` | Index storage location |
 | `JDATAMUNCH_MAX_ROWS` | `5,000,000` | Row cap for indexing |
+| `JDATAMUNCH_MAX_RESPONSE_TOKENS` | `8,000` | Token budget cap per response |
 | `JDATAMUNCH_SHARE_SAVINGS` | `1` | Set `0` to disable anonymous token savings telemetry |
-| `ANTHROPIC_API_KEY` | — | AI column summaries via Claude (v1.1+) |
-| `GOOGLE_API_KEY` | — | AI column summaries via Gemini (v1.1+) |
+| `ANTHROPIC_API_KEY` | — | AI column summaries via Claude |
+| `GOOGLE_API_KEY` | — | AI column summaries via Gemini |
+| `GITHUB_TOKEN` | — | Private repo access for `index_repo` |
+| `JDATAMUNCH_EMBED_MODEL` | — | Local sentence-transformers model for semantic search |
+| `GOOGLE_EMBED_MODEL` | — | Gemini embedding model for semantic search |
+| `OPENAI_API_KEY` | — | OpenAI embeddings for semantic search |
+| `OPENAI_EMBED_MODEL` | — | OpenAI embedding model for semantic search |
 
 ---
 
@@ -347,9 +445,13 @@ Multiple filters are ANDed. No raw SQL accepted — injection surface is zero.
 | Orient on a 255 MB CSV | Paste raw file → **111M tokens** | `describe_dataset` → **3,849 tokens** | **25,333×** |
 | Schema + column deep-dive | Same 111M tokens | `describe_dataset` + `describe_column` → **~4,400 tokens** | **~25,000×** |
 | Find the crime-type column | Scan headers manually | `search_data("crime type")` → column ID | structural |
+| Find column by meaning | No way to search semantically | `search_data("where did it happen", semantic=true)` → `AREA NAME` | structural |
 | Get Hollywood assault rows | Load all 1M rows | `get_rows` with 2 filters → matching rows only | ~99%+ |
 | Crime count by area | Return all rows, aggregate in LLM | `aggregate(group_by=["AREA NAME"])` → 21 rows | ~99.9% |
 | Understand weapon nulls | Load column, count manually | `describe_column("Weapon Used Cd")` → `null_pct: 64.2%` | ~99.9% |
+| Compare two dataset versions | Load both files | `get_schema_drift(a, b)` → breaking/additive assessment | structural |
+| Find correlated columns | Export, pivot, eyeball | `get_correlations` → ranked pairs with strength labels | structural |
+| Combine two datasets | Load both into prompt | `join_datasets` → SQL JOIN, only matching rows | ~99%+ |
 | Re-query an unchanged file | Re-load file every time | Hash check → instant skip if unchanged | 100% of re-read cost |
 
 The case where it doesn't help: you genuinely need every row for ML training or full exports. For that, read the file directly. For everything else — exploration, filtering, aggregation, orientation — structured retrieval wins every time.
@@ -385,7 +487,7 @@ All three implement [jMRI](https://github.com/jgravelle/mcp-retrieval-spec) — 
 ## Best for
 
 * analysts, finance, ops, and consultants working with large spreadsheets
-* AI agents that answer questions about CSV or Excel data
+* AI agents that answer questions about CSV, Excel, Parquet, or JSONL data
 * anyone paying token costs to load files they query repeatedly
 * teams that want structured, auditable data access instead of raw file dumps
 * developers building data-aware agents who need a drop-in retrieval layer
@@ -394,7 +496,9 @@ All three implement [jMRI](https://github.com/jgravelle/mcp-retrieval-spec) — 
 
 ## New here?
 
-Index a file, run `describe_dataset`, and look at what comes back.
+Start with the [QuickStart guide](QUICKSTART.md) — zero to indexed in three steps.
+
+Or if you prefer learning by doing: index a file, run `describe_dataset`, and look at what comes back.
 
 That single call — 35 milliseconds, 3,849 tokens — tells you everything that would have cost you 111 million tokens to read raw.
 

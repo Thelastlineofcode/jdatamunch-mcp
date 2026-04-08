@@ -3,12 +3,12 @@
   "name": "io.github.jgravelle/jdatamunch-mcp",
   "title": "jDataMunch MCP",
   "description": "Token-efficient MCP server for tabular data retrieval. Index CSV/Excel files, query rows, aggregate — 99%+ token savings vs raw file reads.",
-  "version": "0.1.0",
+  "version": "0.8.2",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "jdatamunch-mcp",
-      "version": "0.1.0",
+      "version": "0.8.2",
       "transport": {
         "type": "stdio"
       }
