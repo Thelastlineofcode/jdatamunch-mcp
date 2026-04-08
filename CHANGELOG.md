@@ -1,14 +1,19 @@
 # Changelog
 
-## [0.7.0] — 2026-04-08
+## [0.7.1] — 2026-04-08
 
 ### New features
 
+- **`delete_dataset(dataset)` tool** — remove an indexed dataset and its SQLite store, freeing disk space. Returns rows/columns removed and bytes freed.
 - **`join_datasets(dataset_a, dataset_b, join_column_a, join_column_b)` tool** — SQL JOIN across two indexed datasets via SQLite `ATTACH DATABASE`. Supports `inner`, `left`, `right`, and `cross` join types. Column projection (`columns_a`/`columns_b`), per-side filters (`filters_a`/`filters_b`), ordering, and pagination. Handles column-name collisions with `__b` suffix. Row limit capped at 500, 30 columns per side. Right joins emulated via table swap (SQLite limitation).
+
+### Bug fixes
+
+- Fixed unclosed SQLite connections in `create_table` and `create_indexes` that caused `PermissionError` on Windows when deleting datasets (WAL file locks)
 
 ### Tests
 
-- 20 new tests (171 total, 10 skipped for optional deps)
+- 26 new tests (177 total, 10 skipped for optional deps)
 
 ## [0.6.0] — 2026-04-08
 

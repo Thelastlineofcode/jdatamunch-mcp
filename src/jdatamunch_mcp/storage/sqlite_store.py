@@ -65,12 +65,15 @@ def create_table(
     )
     ddl = f"CREATE TABLE IF NOT EXISTS rows ({col_defs})"
 
-    with sqlite3.connect(str(sqlite_path)) as conn:
+    conn = sqlite3.connect(str(sqlite_path))
+    try:
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA synchronous=NORMAL")
         conn.execute("DROP TABLE IF EXISTS rows")
         conn.execute(ddl)
         conn.commit()
+    finally:
+        conn.close()
 
 
 def _make_col_converter(col_type: str):
@@ -197,7 +200,8 @@ def create_indexes(
     rarely used as primary filter keys. Users who need indexes on higher-cardinality
     columns can add them via direct SQLite access.
     """
-    with sqlite3.connect(str(sqlite_path)) as conn:
+    conn = sqlite3.connect(str(sqlite_path))
+    try:
         conn.execute("PRAGMA synchronous=OFF")
         conn.execute("PRAGMA cache_size=-131072")
         conn.execute("PRAGMA temp_store=MEMORY")
@@ -215,6 +219,8 @@ def create_indexes(
                 except sqlite3.OperationalError:
                     pass
         conn.commit()
+    finally:
+        conn.close()
 
 
 def _build_where(filters: list, schema_columns: list) -> tuple:

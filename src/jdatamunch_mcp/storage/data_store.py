@@ -226,7 +226,7 @@ class DataStore:
     def delete(self, dataset_id: str) -> bool:
         """Delete a dataset index and its SQLite file."""
         dir_ = self.dataset_dir(dataset_id)
-        if dir_.exists():
-            shutil.rmtree(dir_)
-            return True
-        return False
+        if not dir_.exists():
+            return False
+        shutil.rmtree(dir_)
+        return True

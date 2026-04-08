@@ -1,7 +1,7 @@
 # jdatamunch-mcp — Project Brief
 
 ## Current State
-- **Version:** 0.7.0 (published to PyPI)
+- **Version:** 0.7.1 (published to PyPI)
 - **GitHub:** `jgravelle/jdatamunch-mcp`
 - **Python:** >=3.10
 
@@ -30,6 +30,7 @@ src/jdatamunch_mcp/
     get_session_stats.py       # Session token savings stats
     get_schema_drift.py        # get_schema_drift: compare schema between two datasets (added/removed/type/nullability)
     get_data_hotspots.py       # get_data_hotspots: rank columns by data-quality risk (null, cardinality, outlier)
+    delete_dataset.py          # delete_dataset: remove indexed dataset and SQLite store
     get_correlations.py        # get_correlations: pairwise Pearson correlations between numeric columns
     join_datasets.py           # join_datasets: cross-dataset SQL JOIN via ATTACH DATABASE
     summarize_dataset.py       # summarize_dataset: regenerate NL summaries for indexed dataset

@@ -26,6 +26,7 @@ from .tools.summarize_dataset import summarize_dataset as summarize_dataset_tool
 from .tools.index_repo import index_repo
 from .tools.get_correlations import get_correlations
 from .tools.join_datasets import join_datasets
+from .tools.delete_dataset import delete_dataset
 from .budget import enforce_budget
 from .call_tracker import record_call
 
@@ -521,6 +522,23 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="delete_dataset",
+            description=(
+                "Delete an indexed dataset and its SQLite store. Frees disk space. "
+                "Irreversible — the dataset must be re-indexed to use again."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "dataset": {
+                        "type": "string",
+                        "description": "Dataset identifier to delete (from list_datasets)",
+                    },
+                },
+                "required": ["dataset"],
+            },
+        ),
+        Tool(
             name="get_session_stats",
             description="Return cumulative token savings and cost avoided across all tool calls.",
             inputSchema={"type": "object", "properties": {}},
@@ -634,6 +652,11 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 n=arguments.get("n", 5),
                 method=arguments.get("method", "head"),
                 columns=arguments.get("columns"),
+                storage_path=storage_path,
+            )
+        elif name == "delete_dataset":
+            result = delete_dataset(
+                dataset=arguments["dataset"],
                 storage_path=storage_path,
             )
         elif name == "get_session_stats":
