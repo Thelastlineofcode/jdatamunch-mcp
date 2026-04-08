@@ -25,6 +25,7 @@ from .tools.get_data_hotspots import get_data_hotspots
 from .tools.summarize_dataset import summarize_dataset as summarize_dataset_tool
 from .tools.index_repo import index_repo
 from .tools.get_correlations import get_correlations
+from .tools.join_datasets import join_datasets
 from .budget import enforce_budget
 from .call_tracker import record_call
 
@@ -424,6 +425,83 @@ async def list_tools() -> list[Tool]:
             },
         ),
         Tool(
+            name="join_datasets",
+            description=(
+                "Join two indexed datasets via SQL JOIN. Uses ATTACH DATABASE to combine "
+                "two SQLite stores into one query. Supports inner, left, right, and cross joins. "
+                "Use columns_a/columns_b to project — reduces tokens on wide tables. "
+                "Row limit capped at 500. Prefer aggregate() on join results for summaries."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "dataset_a": {
+                        "type": "string",
+                        "description": "First dataset identifier (left side of join)",
+                    },
+                    "dataset_b": {
+                        "type": "string",
+                        "description": "Second dataset identifier (right side of join)",
+                    },
+                    "join_column_a": {
+                        "type": "string",
+                        "description": "Column from dataset_a to join on",
+                    },
+                    "join_column_b": {
+                        "type": "string",
+                        "description": "Column from dataset_b to join on",
+                    },
+                    "join_type": {
+                        "type": "string",
+                        "enum": ["inner", "left", "right", "cross"],
+                        "description": "Join type (default 'inner')",
+                        "default": "inner",
+                    },
+                    "columns_a": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Columns to select from dataset_a (default: first 30)",
+                    },
+                    "columns_b": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Columns to select from dataset_b (default: first 30)",
+                    },
+                    "filters_a": {
+                        "type": "array",
+                        "items": {"type": "object"},
+                        "description": "Pre-filter dataset_a rows (same syntax as get_rows filters)",
+                    },
+                    "filters_b": {
+                        "type": "array",
+                        "items": {"type": "object"},
+                        "description": "Pre-filter dataset_b rows (same syntax as get_rows filters)",
+                    },
+                    "order_by": {
+                        "type": "string",
+                        "description": "Column to sort results by",
+                    },
+                    "order_dir": {
+                        "type": "string",
+                        "enum": ["asc", "desc"],
+                        "description": "Sort direction (default 'asc')",
+                        "default": "asc",
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max rows returned (default 50, hard cap 500)",
+                        "default": 50,
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "Pagination offset (default 0)",
+                        "default": 0,
+                    },
+                },
+                "required": ["dataset_a", "dataset_b", "join_column_a", "join_column_b"],
+            },
+        ),
+        Tool(
             name="summarize_dataset",
             description=(
                 "Generate natural-language summaries for a dataset and all its columns. "
@@ -579,6 +657,24 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
                 min_abs_correlation=arguments.get("min_abs_correlation", 0.3),
                 columns=arguments.get("columns"),
                 top_n=arguments.get("top_n", 20),
+                storage_path=storage_path,
+            )
+        elif name == "join_datasets":
+            result = await asyncio.to_thread(
+                join_datasets,
+                dataset_a=arguments["dataset_a"],
+                dataset_b=arguments["dataset_b"],
+                join_column_a=arguments["join_column_a"],
+                join_column_b=arguments["join_column_b"],
+                join_type=arguments.get("join_type", "inner"),
+                columns_a=arguments.get("columns_a"),
+                columns_b=arguments.get("columns_b"),
+                filters_a=arguments.get("filters_a"),
+                filters_b=arguments.get("filters_b"),
+                order_by=arguments.get("order_by"),
+                order_dir=arguments.get("order_dir", "asc"),
+                limit=arguments.get("limit", 50),
+                offset=arguments.get("offset", 0),
                 storage_path=storage_path,
             )
         elif name == "summarize_dataset":

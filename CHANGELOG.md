@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.7.0] — 2026-04-08
+
+### New features
+
+- **`join_datasets(dataset_a, dataset_b, join_column_a, join_column_b)` tool** — SQL JOIN across two indexed datasets via SQLite `ATTACH DATABASE`. Supports `inner`, `left`, `right`, and `cross` join types. Column projection (`columns_a`/`columns_b`), per-side filters (`filters_a`/`filters_b`), ordering, and pagination. Handles column-name collisions with `__b` suffix. Row limit capped at 500, 30 columns per side. Right joins emulated via table swap (SQLite limitation).
+
+### Tests
+
+- 20 new tests (171 total, 10 skipped for optional deps)
+
 ## [0.6.0] — 2026-04-08
 
 ### New features

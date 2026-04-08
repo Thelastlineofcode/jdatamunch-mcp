@@ -53,7 +53,7 @@ def enforce_budget(result: dict, tool_name: str) -> dict:
             _trim_list_field(inner, "columns", budget * 4 // 3)
             truncations.append(f"columns truncated to {len(inner['columns'])}")
 
-    elif tool_name in ("get_rows", "sample_rows") and isinstance(inner, dict):
+    elif tool_name in ("get_rows", "sample_rows", "join_datasets") and isinstance(inner, dict):
         rows = inner.get("rows", [])
         if isinstance(rows, list) and len(rows) > 1:
             # First try trimming rows
