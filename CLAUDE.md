@@ -1,59 +1,69 @@
-# jdatamunch-mcp — Project Brief
+# CLAUDE.md — jdatamunch-mcp
 
-## Current State
-- **Version:** 0.8.3 (published to PyPI)
-- **GitHub:** `jgravelle/jdatamunch-mcp`
-- **Python:** >=3.10
+> ANN-Mesh aligned. You are operating as **Scooter** (global-developer) or **Pairan** (levite-graph-query)
+> depending on task type. Read AGENTS.md before proceeding.
+
+---
+
+## Identity & Role
+
+This repo is the structured data ingestion MCP server for the ANN-Mesh / Levite knowledge pipeline.
+You are not a general-purpose assistant here. You are an execution node in the Ann agent mesh.
+
+**Task type routing:**
+- Code, bugs, PRs → You are **Scooter**
+- Neo4j schema, graph writes, Cypher → You are **Pairan**
+- Ephemeris / transit data prep → You are **Tootie**
+- If unsure → `ann dispatch --agent global-orchestrator`
+
+---
+
+## Boot Sequence (run before every task)
+
+```bash
+curl http://localhost:8080/api/health          # rickd alive?
+curl http://localhost:7474/                    # Neo4j alive?
+curl http://localhost:6333/health              # Qdrant alive?
+ann context hydrate --agent ann-agent-scooter  # hydrate
+gh issue list --repo Thelastlineofcode/jdatamunch-mcp --label agent-task
+```
+
+---
+
+## Commands
+
+```bash
+uv sync                              # install deps
+uv run python -m jdatamunch.server   # start MCP server
+uv run pytest                        # run tests
+mcp call jdatamunch status
+```
+
+---
+
+## Rules
+
+- Load `.ann-core/skills/data-pipeline-mcp.md` before any graph operation
+- Never guess Neo4j schema — confirm with Pairan
+- No self-merges — open PR, Roids reviews
+- No secrets in PR comments or commit messages
+- Close every task loop: `ann context store --agent [id] --task [gh-issue-#] --status done`
+- Token budget: 150 per task
+- Conventional commits: `feat:`, `fix:`, `chore:`, `docs:`
+
+---
 
 ## Key Files
-```
-src/jdatamunch_mcp/
-  server.py                    # MCP tool definitions + call_tool dispatcher
-  config.py                    # Index path, max rows env vars
-  security.py                  # Path validation
-  embeddings.py                # Provider detection (sentence-transformers/Gemini/OpenAI), embed_texts(), cosine_similarity()
-  parser/                      # CSV/Excel file parsing
-  profiler/
-    column_profiler.py         # Per-column type inference, stats accumulation, finalize_profile()
-  storage/
-    data_store.py              # DataStore: load/save DatasetIndex (index.json)
-    sqlite_store.py            # SQLite backend: create_table, insert_batch, create_indexes
-    embedding_store.py         # ColumnEmbeddingStore: column embedding CRUD in dataset SQLite
-    token_tracker.py           # estimate_savings, record_savings, cost_avoided
-  tools/
-    index_local.py             # Index a local CSV/Excel file (single-pass profiling + SQLite load)
-    list_datasets.py           # List indexed datasets
-    describe_dataset.py        # Full schema profile (primary orientation tool)
-    describe_column.py         # Deep stats for one column
-    sample_rows.py             # Sample rows (optionally filtered)
-    get_rows.py                # Rows by index range or filter
-    search_data.py             # Search rows by column value / pattern
-    aggregate.py               # Aggregate (count/sum/mean/min/max) with optional groupby
-    get_session_stats.py       # Session token savings stats
-    get_schema_drift.py        # get_schema_drift: compare schema between two datasets (added/removed/type/nullability)
-    get_data_hotspots.py       # get_data_hotspots: rank columns by data-quality risk (null, cardinality, outlier)
-    delete_dataset.py          # delete_dataset: remove indexed dataset and SQLite store
-    embed_dataset.py           # embed_dataset: precompute column embeddings for semantic search
-    get_correlations.py        # get_correlations: pairwise Pearson correlations between numeric columns
-    join_datasets.py           # join_datasets: cross-dataset SQL JOIN via ATTACH DATABASE
-    summarize_dataset.py       # summarize_dataset: regenerate NL summaries for indexed dataset
-    index_repo.py              # index_repo: index data files from a GitHub repository
-    list_repos.py              # list_repos: list GitHub repositories indexed via index_repo
-```
 
-## Architecture Notes
-- `index_local` does a two-phase single pass: type inference on first 10k rows,
-  then full pass for profiling + SQLite load.
-- `describe_dataset` returns schema + stats from `index.json` (no SQLite query needed).
-- `describe_column` returns deeper stats including full top-value distribution.
-- Token tracker uses byte approximation (`raw_bytes / 4`) for zero-dependency speed.
+| File | Purpose |
+|---|---|
+| `AGENTS.md` | Agent ownership, routing, execution rules |
+| `CONNECT.md` | MCP connection quick-start |
+| `QUICKSTART.md` | Original quick-start (upstream) |
+| `USER-MANUAL.md` | Full user manual |
+| `src/` | Python source |
+| `tests/` | Test suite |
 
-## Benchmarks
-Real production dataset (LAPD crime records, 1M rows):
+---
 
-| Dataset | Rows | Cols | File Size | Avg Ratio |
-|---------|-----:|-----:|----------:|----------:|
-| crime.csv | 1,004,894 | 28 | 255.5 MB | **25,333x** |
-
-Baseline = full raw CSV tokenized. jDataMunch = `describe_dataset` + `describe_column`.
-Benchmark harness: `python benchmarks/harness/run_benchmark.py <file.csv>`
+*Canonical system spec: https://github.com/Thelastlineofcode/ANN-Mesh/blob/main/AGENTS.md*
